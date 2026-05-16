@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>One Model to Forecast Them All</title>
+<style>
+  body { max-width: 720px; margin: 40px auto; padding: 0 20px;
+         font-family: Georgia, serif; font-size: 19px; line-height: 1.7;
+         color: #222; }
+  h1 { font-size: 34px; line-height: 1.25; }
+  h2 { font-size: 26px; margin-top: 2em; }
+  h3 { font-size: 20px; color: #555; font-weight: normal; }
+  img { max-width: 100%; height: auto; display: block; margin: 1.2em auto; }
+  em { color: #666; font-size: 16px; }
+  code { background:#f2f2f2; padding:1px 5px; border-radius:3px;
+          font-size:15px; }
+  hr { border:none; border-top:1px solid #ddd; margin:2.2em 0; }
+  a { color:#1a8917; }
+</style></head><body>
+<h1>One Model to Forecast Them All: The Rise of Time-Series Foundation Models</h1>
+<h3>How the "pre-train once, predict anything" recipe finally reached the messiest data modality of all — and what I found when I tested it myself.</h3>
+<p><em>A short-story review for CMPE 258 (Deep Learning). Based primarily on the survey "Empowering Time Series Analysis with Foundation Models: A Comprehensive Survey" by Jiexia Ye, Yongzi Yu, Weiqi Zhang, Le Wang, Jia Li and Fugee Tsung (arXiv:2405.02358v3, 2025), with supporting material from two further 2025 surveys. Full citations at the end.</em></p>
+<hr />
+<h2>TL;DR</h2>
+<p>For a decade, every data modality got its "foundation model" moment — text got GPT, images got CLIP and SAM, audio got Whisper — except one: <strong>time series</strong>. The numeric streams that run electricity grids, hospitals, supply chains and stock markets stubbornly resisted the recipe. Between late 2023 and 2025 that changed. A wave of <strong>time-series foundation models (TSFMs)</strong> — TimesFM, Chronos, Moirai, MOMENT, Time-MoE and others — arrived, and they can forecast a series they have <em>never seen</em> without a single step of training on it.</p>
+<p>This article walks through the survey's map of that landscape: the <strong>three pathways</strong> to building such a model, the <strong>four design challenges</strong> every one of them must solve, and the architecture families behind the names. Then I do something the survey itself does not: I <strong>reproduce the core claim</strong> with a small experiment, and I show why the most important open problem is no longer accuracy — it is <strong>trustworthy evaluation</strong>.</p>
+<hr />
+<h2>1. Why time series was the last holdout</h2>
+<p>A foundation model is, loosely, a large neural network pre-trained on a huge, broad dataset so that it can be reused — often with no further training — across many downstream tasks. The recipe is now routine for language and vision. Time series broke it for three concrete reasons that the surveys spell out:</p>
+<ul>
+<li><strong>The data is scarce and fragmented.</strong> The internet is one giant text corpus. There is no equivalent firehose of time series. Useful series live in private silos — a hospital's vitals, a factory's sensors, a bank's transactions — and each domain is small.</li>
+<li><strong>Every dataset has a different shape.</strong> Text is always a sequence of tokens. Time series arrive at different sampling rates (every second vs. every month), with a different number of channels (one sensor vs. ten thousand), and with different <em>meanings</em> — a rising line is a healthy sales trend in one domain and a failing machine in another. The survey calls this "semantic variability."</li>
+<li><strong>Classical methods were already very good.</strong> ARIMA and exponential smoothing are decades old, fast, and genuinely hard to beat on a single well-behaved series. The bar for "why bother with a giant model" was high.</li>
+</ul>
+<p>The breakthrough was realizing none of these were fatal — they were just <strong>engineering problems</strong>. That reframing is the spine of the survey.</p>
+<hr />
+<h2>2. The big idea: three pathways to a time-series foundation model</h2>
+<p>The survey's central organizing insight is that you can reach a time-series foundation model from three different starting points. This is the article's most important picture.</p>
+<p><img alt="Three pathways to a time-series foundation model" src="https://raw.githubusercontent.com/NMemane1/CMPE258-Short-Story-TS-FM-DeepLearning/main/medium_article/images/fig1_three_pathways.png" />
+<em>Figure 1 — The three pathways. Redrawn from the survey's framing (Ye et al., 2025).</em></p>
+<p><strong>Pathway 1 — Time-Series Foundation Models (TSFMs).</strong> Pre-train a model <em>from scratch</em>, directly on billions of real time-series points. This is the purest approach and where most 2024–2025 progress happened: TimesFM, Chronos, Moirai, MOMENT, Time-MoE, Lag-Llama.</p>
+<p><strong>Pathway 2 — Language-based Foundation Models (LFMs).</strong> Take an existing large language model — GPT-2, LLaMA — and teach it to "read" numbers. Examples: GPT4TS, Time-LLM, LLMTime. The appeal is obvious: LLMs already learned powerful sequence-modeling machinery, so why not borrow it?</p>
+<p><strong>Pathway 3 — Vision-based Foundation Models (VFMs).</strong> The cleverest and strangest route: <em>render the time series as an image</em> — a line plot or a heatmap — and feed it to a pre-trained vision model. Examples: VisionTS, ViTST, Time-VLM.</p>
+<p>What makes this survey distinctive is that it is the only one to cover all three pathways under a single <strong>"modality-aware, challenge-oriented"</strong> lens across 88 papers. Most of this article focuses on Pathway 1, because that is where the headline results live — but the other two are genuinely active and I will return to them.</p>
+<hr />
+<h2>3. Building a TSFM: the four design challenges</h2>
+<p>Pre-training a model from scratch on raw signals sounds simple until you try. The survey decomposes it into <strong>four challenges</strong>, and almost every TSFM you have heard of is just a particular set of answers to these four questions.</p>
+<p><img alt="The four design challenges of a TSFM" src="https://raw.githubusercontent.com/NMemane1/CMPE258-Short-Story-TS-FM-DeepLearning/main/medium_article/images/fig2_tsfm_challenges.png" />
+<em>Figure 2 — The four design challenges, summarizing the survey's TSFM taxonomy.</em></p>
+<p><strong>Challenge 1 — Where does the pre-training data come from?</strong> Since no time-series firehose exists, teams <em>build</em> corpora. Two tactics dominate. The first is <strong>integration</strong>: stitch together every public dataset you can find. Moirai's <strong>LOTSA</strong> corpus holds 27 billion points across 9 domains; MOMENT's <strong>Time Series Pile</strong> spans 13 domains; Time-MoE's <strong>Time-300B</strong> reaches 300 billion points; THUML's <strong>Sundial</strong> trained on a corpus of <em>one trillion</em> time points. The second tactic is <strong>augmentation and synthesis</strong> — generate artificial-but-realistic series with tricks like KernelSynth or frequency-domain mixing (Freq-Mix, Freq-Mask) to plug the gaps.</p>
+<p><strong>Challenge 2 — How do you turn a signal into tokens?</strong> A Transformer eats discrete tokens; a time series is a stream of floats. Three answers appear repeatedly:
+- <strong>Point-wise</strong> — each timestamp is a token (Time-MoE).
+- <strong>Patch-wise</strong> — slice the series into short fixed-length windows, each window is a token (TimesFM, Moirai, MOMENT). This is the most popular choice; it shortens the sequence and captures local shape.
+- <strong>Quantization-wise</strong> — scale the values and bin them into a fixed vocabulary, exactly like words. This is <strong>Chronos's</strong> signature move: it literally turns forecasting into language modeling.</p>
+<p>A second decision hides here: with multiple channels, do you treat each independently (<strong>channel independence</strong>) or let them interact (<strong>channel mixing</strong>)? Moirai's "any-variate attention" is a notable answer that handles any number of channels.</p>
+<p><strong>Challenge 3 — What architecture?</strong> Always a Transformer, but in one of three flavors — covered in the next section. Efficiency add-ons matter too: <strong>mixture-of-experts</strong> (Time-MoE, Moirai-MoE) lets a model hold billions of parameters but activate only a slice per prediction.</p>
+<p><strong>Challenge 4 — How do you serve many tasks at once?</strong> A foundation model should not just forecast. The survey lists four core tasks — <strong>forecasting, imputation (filling gaps), classification, and anomaly detection</strong>. Models either bolt a small task-specific head onto a shared trunk (MOMENT) or reformulate every task into one generative "predict the next chunk" format (Timer).</p>
+<hr />
+<h2>4. The three architecture families</h2>
+<p>Strip away the branding and almost every TSFM is one of three Transformer shapes. Which one a team picks is a direct bet on what they want the model to be good at.</p>
+<p><img alt="Transformer backbone families for time series" src="https://raw.githubusercontent.com/NMemane1/CMPE258-Short-Story-TS-FM-DeepLearning/main/medium_article/images/fig4_architectures.png" />
+<em>Figure 3 — Encoder-only, decoder-only, and encoder-decoder backbones.</em></p>
+<ul>
+<li><strong>Encoder-only</strong> models (MOMENT, Moirai) are trained by masking out chunks and reconstructing them — the BERT recipe. They build rich <em>representations</em> and are the natural choice for multi-task use (classification, anomaly detection).</li>
+<li><strong>Decoder-only</strong> models (TimesFM, Time-MoE, Lag-Llama, Timer, Sundial) are trained to autoregressively predict the next patch — the GPT recipe. They dominate pure <strong>forecasting</strong>, and it is no accident that the largest TSFMs are decoder-only.</li>
+<li><strong>Encoder-decoder</strong> models (Chronos, TimeGPT) translate a history sequence into a future sequence. Chronos sits here because it reuses Google's <strong>T5</strong> text-to-text backbone almost unchanged.</li>
+</ul>
+<p>The pattern across all three surveys is consistent: <strong>decoder-only for forecasting, encoder-only for representation and multi-task work.</strong> If you remember one thing about TSFM architecture, remember that.</p>
+<hr />
+<h2>5. The model boom, at a glance</h2>
+<p>The pace of 2024–2025 is hard to overstate. Here is the landscape plotted by release date and parameter count.</p>
+<p><img alt="The time-series foundation model boom 2022-2025" src="https://raw.githubusercontent.com/NMemane1/CMPE258-Short-Story-TS-FM-DeepLearning/main/medium_article/images/fig3_timeline.png" />
+<em>Figure 4 — TSFM and LFM releases by date and scale. Bubble size is parameter count.</em></p>
+<p>A few things stand out. First, the <strong>scale jump</strong>: from Timer's 67M parameters to Time-MoE's 2.4B in under a year. Second, the <strong>vendor land-grab</strong> — Google (TimesFM), Amazon (Chronos), Salesforce (Moirai), Nixtla (TimeGPT), IBM (Tiny Time Mixers), and Tsinghua's THUML lab (Timer, Sundial) all shipped models. Third, the survey's quiet counter-point: bigger is <em>not</em> automatically better — IBM's <strong>Tiny Time Mixers</strong> is a roughly 1M-parameter model built to compete, and the survey treats lightweight design as a first-class research direction, not an afterthought.</p>
+<p>Here is a compact reference table of the headline TSFMs.</p>
+<p><img alt="Table" src="https://raw.githubusercontent.com/NMemane1/CMPE258-Short-Story-TS-FM-DeepLearning/main/medium_article/images/table1_models.png" /></p>
+<hr />
+<h2>6. Pathways 2 and 3: borrowing brains from text and vision</h2>
+<p><strong>Language-based models (LFMs)</strong> ask a provocative question — can a model trained only on text forecast numbers? Surprisingly often, yes. The survey organizes them by <em>how</em> they bridge the gap between a continuous signal and discrete language. The crudest approach, <strong>LLMTime</strong>, just writes the numbers out as space-separated digits and lets GPT-3 continue the sequence. More sophisticated ones, like <strong>Time-LLM</strong>, keep the LLM frozen and "reprogram" the series through a cross-attention layer that aligns it with real word embeddings. <strong>GPT4TS</strong> (also called FPT, "One Fits All") freezes most of a GPT-2 and fine-tunes only the embedding and normalization layers — and still handles four task types. The recurring theme is <strong>parameter-efficient tuning</strong>: touch as little of the giant pre-trained model as possible.</p>
+<p><strong>Vision-based models (VFMs)</strong> are the survey's most surprising chapter. The idea: a forecasting problem becomes an <em>image-completion</em> problem. <strong>VisionTS</strong> renders the series as a heatmap and hands it to a masked autoencoder — a model pre-trained only on natural images — which "inpaints" the missing future. It works because the visual patterns of trend and seasonality are, apparently, not so different from textures a vision model already understands.</p>
+<p>Both pathways are real, but Pathway 1 still owns the leaderboard. Which raises the question every reader should be asking by now: <strong>do these models actually work?</strong></p>
+<hr />
+<h2>7. Putting the claim to the test — my reproduction</h2>
+<p>The surveys are structural — they map the field but contain no head-to-head accuracy table. So I ran my own experiment to check the single most important claim: <em>a model pre-trained once, used </em><em>zero-shot</em><em>, can match models fit individually to each series.</em></p>
+<p><strong>Setup.</strong> I used <strong>Chronos</strong> (<code>chronos-bolt-small</code>, ~48M parameters, Amazon Science) — never calling <code>.fit()</code>, never showing it any of my test data during training. I forecast the held-out tail of <strong>four classic public datasets</strong> the model had never seen — airline passengers, monthly car sales, monthly sunspots, and daily minimum temperatures — and compared it against three classical baselines, each <em>fit individually</em> to its target series: Naive, Seasonal Naive, and Exponential Smoothing (Holt-Winters). The headline metric is <strong>MASE</strong> (Mean Absolute Scaled Error): below 1.0 means you beat a seasonal-naive forecast, and it is comparable across datasets of wildly different scale.</p>
+<p><strong>Result.</strong></p>
+<p><img alt="Table" src="https://raw.githubusercontent.com/NMemane1/CMPE258-Short-Story-TS-FM-DeepLearning/main/medium_article/images/table2_results.png" /></p>
+<p>The zero-shot foundation model achieved a <strong>lower average error than Exponential Smoothing models that were each tuned to their own series</strong> — and it did so in about a second of CPU inference, with no training loop at all.</p>
+<p><img alt="Sunspots forecast: zero-shot Chronos vs classical baselines" src="https://raw.githubusercontent.com/NMemane1/CMPE258-Short-Story-TS-FM-DeepLearning/main/medium_article/images/forecast_Sunspots.png" />
+<em>Figure 5 — Monthly sunspots, 60-step horizon. The zero-shot foundation model (blue) tracks the falling solar cycle; the classical baselines collapse toward a flat line. The shaded band is Chronos's 80% prediction interval — uncertainty quantification for free.</em></p>
+<p>The sunspots case is the most striking. Over a long 60-step horizon, the classical models simply reverted to a flat mean, while Chronos — drawing on patterns absorbed during pre-training — anticipated the <em>shape</em> of the decline.</p>
+<p><img alt="Skill score: zero-shot FM vs tuned Exponential Smoothing" src="https://raw.githubusercontent.com/NMemane1/CMPE258-Short-Story-TS-FM-DeepLearning/main/medium_article/images/skill_score.png" />
+<em>Figure 6 — Skill score versus Seasonal Naive (higher is better). The zero-shot foundation model wins on three of four datasets.</em></p>
+<p><strong>But it is not magic.</strong> On the daily-temperature series — short horizon, near-stationary — the dumb Naive forecast won. This is the survey's "no free lunch" caveat in miniature: foundation models shine on long horizons and rich structure, and add little where a one-line heuristic already nails it. An honest review has to say that out loud.</p>
+<p><em>(Full code, the executed notebook, metrics and figures are in the <code>reproduction/</code> folder of the companion GitHub repo.)</em></p>
+<hr />
+<h2>8. The catch nobody can ignore: are the benchmarks even real?</h2>
+<p>Here is where the third paper — <em>Rethinking Evaluation in the Era of Time Series Foundation Models: (Un)Known Information Leakage Challenges</em> (Meyer et al., arXiv:2510.13654, Oct 2025) — delivers the most uncomfortable, and most important, message in this whole story.</p>
+<p>If a model is pre-trained on "every public dataset we could find," and you then evaluate it on a public benchmark — <strong>how do you know the benchmark was not in the training data?</strong> This is <em>test-set contamination</em>, the same crisis that haunts LLM evaluation, and for TSFMs it is rampant. The paper found that only <strong>7% of datasets were never used for either pre-training or fine-tuning</strong> by some model. One model's training set is routinely another model's test set.</p>
+<p>The numbers are alarming.</p>
+<p><img alt="Why zero-shot numbers must be read carefully" src="https://raw.githubusercontent.com/NMemane1/CMPE258-Short-Story-TS-FM-DeepLearning/main/medium_article/images/fig5_contamination.png" />
+<em>Figure 7 — Contamination effects, redrawn from Meyer et al. (2025). Left: when an evaluation dataset leaks into pre-training, apparent improvement jumps to 47–184%, versus 0.3–14% on clean datasets. Right: injecting just 0.1% deliberate leakage flattered Moirai's accuracy by up to 32 percentage points of MAPE.</em></p>
+<p>A controlled study found that adding <strong>just 0.1% of deliberate leakage</strong> to Moirai's pre-training data improved its medium-horizon MAPE by ~32 percentage points — and that <strong>larger models were more prone to this memorization</strong>, not less. In the FoundTS benchmark, three datasets had accidentally leaked into the pre-training of TimesFM, UniTS and TTM, producing 47–184% better scores on the leaked data versus 0.3–14% on clean data.</p>
+<p>The proposed fix is conceptually simple and worth knowing: a <strong>continuously advancing global temporal split</strong> — the test set is always genuine, yet-unseen <em>future</em> data, so it cannot have leaked. It is harder to game than any static benchmark.</p>
+<hr />
+<h2>9. My two cents</h2>
+<p>Having read across three surveys, run the reproduction, and stared at the contamination numbers, here is what I actually think.</p>
+<p><strong>The zero-shot result is real and it is a big deal.</strong> I went in skeptical — "fit per series" sounds like it should always win. It did not. A 48M-parameter model I never trained beat tuned classical models on average, on data it had never seen. For practitioners, the workflow shift is concrete: a TSFM is now a <em>strong default baseline you can call in one line of code</em>, not a research curiosity.</p>
+<p><strong>But the field's headline numbers are softer than they look.</strong> After Figure 7, I no longer fully trust any leaderboard MASE I have not personally checked for leakage. The honest takeaway from 2025 is that <strong>TSFM accuracy is solved enough; TSFM evaluation is not.</strong> That is a refreshing thing for a research field to admit, and the Meyer survey deserves credit for saying it plainly.</p>
+<p><strong>The vision pathway is underrated.</strong> "Render the series as a picture and inpaint the future" sounds like a hack, but it quietly reuses the largest, best-funded pre-trained models on Earth. I expect more from this direction than the current paper count suggests.</p>
+<p><strong>The open frontier is not scale — it is trust.</strong> The next milestone is not a 10-billion-parameter TSFM. It is a TSFM you can deploy in a hospital or a power grid and <em>audit</em>: contamination-free benchmarks, calibrated uncertainty (which, encouragingly, Figure 5 shows we already partly have), and interpretability.</p>
+<hr />
+<h2>10. Conclusion</h2>
+<p>Time series was the last modality to get its foundation-model moment, and the survey by Ye et al. is the clearest map of how it finally happened: three pathways, four design challenges, three architecture families, and roughly a hundred models in two years. My own small reproduction confirms the core promise — a pre-trained model, used zero-shot, is now a genuinely competitive forecaster. But the 2025 benchmarking survey is the necessary cold shower: until evaluation is contamination-proof, every impressive number deserves a second look.</p>
+<p>"Pre-train once, predict anything" has, at last, reached the messiest modality of all. The work that remains is making sure we can <em>believe</em> the predictions.</p>
+<hr />
+<h2>References</h2>
+<ol>
+<li>J. Ye, Y. Yu, W. Zhang, L. Wang, J. Li, F. Tsung. <strong>"Empowering Time Series Analysis with Foundation Models: A Comprehensive Survey."</strong> arXiv:2405.02358v3, 2025. <em>(primary paper reviewed)</em></li>
+<li>S. R. K. Kottapalli, K. Hubli, S. Chandrashekhara, G. Jain, S. Hubli, G. Botla, R. Doddaiah. <strong>"Foundation Models for Time Series: A Survey."</strong> arXiv:2504.04011, 2025.</li>
+<li>M. Meyer, S. Kaltenpoth, K. Zalipski, O. Müller. <strong>"Rethinking Evaluation in the Era of Time Series Foundation Models: (Un)Known Information Leakage Challenges."</strong> arXiv:2510.13654, 2025.</li>
+<li>A. F. Ansari et al. <strong>"Chronos: Learning the Language of Time Series."</strong> Transactions on Machine Learning Research, 2024.</li>
+<li>A. Das, W. Kong, R. Sen, Y. Zhou. <strong>"A Decoder-Only Foundation Model for Time-Series Forecasting"</strong> (TimesFM). ICML, 2024.</li>
+<li>G. Woo et al. <strong>"Unified Training of Universal Time Series Forecasting Transformers"</strong> (Moirai). ICML, 2024.</li>
+</ol>
+<p><em>All diagrams in this article were created by the author. Figures 1–4 and 7 are original redrawings that summarize concepts and data from the cited surveys; Figures 5–6 are outputs of the author's own reproduction experiment. Companion code, slides and video: see the linked GitHub repository.</em></p>
+<hr />
+<p><em>Written as an individual short-story assignment for CMPE 258, San José State University.</em></p>
+</body></html>
