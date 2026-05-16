@@ -1,0 +1,17 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Node
+node_modules/
+package-lock.json
+
+# Hugging Face model cache
+.cache/
+
+# OS / build junk
+.DS_Store
+slides/slide-*.jpg
+*.tmp
