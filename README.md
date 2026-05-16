@@ -32,7 +32,7 @@ PDFs and details: [`paper/`](paper/).
 |---|---|
 | 📝 Medium article | https://medium.com/@nikita.memane/one-model-to-forecast-them-all-the-rise-of-time-series-foundation-models-70dadd044e7a |
 | 📊 Slides on SlideShare | https://www.slideshare.net/slideshow/time-series-foundation-models-a-short-story-review/287540970 |
-| 🎥 Video walkthrough (15–25 min) | **_<paste your YouTube URL here, or see `video/`>_** |
+| 🎥 Video walkthrough (15–25 min) | https://docs.google.com/videos/d/1Zx2RZ2jE0LDCyk2omDIQjoRKN5VdgQv1xZ2z_JA0Qj8/edit?usp=sharing |
 | 💻 GitHub repository (this repo, public) | https://github.com/NMemane1/CMPE258-Short-Story-TS-FM-DeepLearning |
 
 > The Medium article, SlideShare deck, and video are published from the source
