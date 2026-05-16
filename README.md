@@ -46,6 +46,7 @@ PDFs and details: [`paper/`](paper/).
 ```
 .
 ├── README.md                  ← you are here
+├── REVIEW.md                   ← teammate review sign-off
 ├── paper/                      ← the 3 survey PDFs + notes
 ├── medium_article/
 │   ├── article.md              ← the full Medium article (original writing)
