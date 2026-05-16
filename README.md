@@ -30,7 +30,7 @@ PDFs and details: [`paper/`](paper/).
 
 | Deliverable | Link |
 |---|---|
-| 📝 Medium article | **_<paste your published Medium URL here>_** |
+| 📝 Medium article | https://medium.com/@nikita.memane/one-model-to-forecast-them-all-the-rise-of-time-series-foundation-models-70dadd044e7a |
 | 📊 Slides on SlideShare | **_<paste your SlideShare URL here>_** |
 | 🎥 Video walkthrough (15–25 min) | **_<paste your YouTube URL here, or see `video/`>_** |
 | 💻 GitHub repository (this repo, public) | https://github.com/NMemane1/CMPE258-Short-Story-TS-FM-DeepLearning |
